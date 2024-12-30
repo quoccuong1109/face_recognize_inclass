@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thêm dữ liệu khuôn mặt</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+    <header class="animate__animated animate__fadeInDown">
+        <h1>Thêm dữ liệu khuôn mặt</h1>
+        <button id="homeButton" class="home-button"><i class="fas fa-home"></i> Trở về trang chủ</button>
+    </header>
+
+    <main>
+        <section class="hero animate__animated animate__fadeInUp">
+            <form id="addFaceForm" class="form-container">
+                <label for="user_id">ID:</label>
+                <input type="text" id="user_id" name="user_id" readonly>
+                <label for="user_name">Tên:</label>
+                <input type="text" id="user_name" name="user_name" required>
+                <button type="button" id="startCameraButton" class="camera-button"><i class="fas fa-camera"></i> Bắt đầu camera</button>
+                <div id="camera" class="camera-container">
+                    <img id="videoFeed" src="" alt="Video Feed">
+                </div>
+                <button type="submit" class="submit-button"><i class="fas fa-user-plus"></i> Thêm khuôn mặt</button>
+            </form>
+        </section>
+    </main>
+
+    <script>
+        document.getElementById('homeButton').addEventListener('click', function() {
+            window.location.href = '/';
+        });
+
+        document.getElementById('startCameraButton').addEventListener('click', function() {
+            startCamera();
+        });
+
+        document.getElementById('addFaceForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const formData = new FormData(this);
+            fetch('/add_face', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                Swal.fire({
+                    title: 'Thành công!',
+                    text: data.message,
+                    icon: 'success',
+                    confirmButtonText: 'OK'
+                });
+            })
+            .catch(error => {
+                Swal.fire({
+                    title: 'Lỗi!',
+                    text: 'Có lỗi xảy ra khi thêm dữ liệu khuôn mặt.',
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                });
+                console.error('Error adding face data:', error);
+            });
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('/get_next_id')
+                .then(response => response.json())
+                .then(data => {
+                    const userIdInput = document.getElementById('user_id');
+                    userIdInput.value = data.next_id;
+                })
+                .catch(error => {
+                    console.error('Error fetching next ID:', error);
+                });
+        });
+
+        function startCamera() {
+            const videoFeed = document.getElementById('videoFeed');
+            videoFeed.src = "{{ url_for('video_feed') }}";
+        }
+    </script>
+</body>
+</html>

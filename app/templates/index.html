@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trang web điểm danh học sinh tự động bằng công nghệ AI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+    <header class="animate__animated animate__fadeInDown">
+        <h1>Trang web điểm danh học sinh tự động bằng công nghệ AI</h1>
+        <button id="deleteDataButton" class="delete-button"><i class="fas fa-trash-alt"></i> Xóa dữ liệu đã train</button>
+        <button id="addFaceButton" class="delete-button"><i class="fas fa-user-plus"></i> Thêm dữ liệu khuôn mặt</button>
+    </header>
+
+    <main>
+        <section class="hero animate__animated animate__fadeInUp">
+            <h2>Chào mừng bạn đến với hệ thống điểm danh tự động</h2>
+            <p>Sử dụng công nghệ AI để nhận diện khuôn mặt và điểm danh học sinh một cách nhanh chóng và chính xác.</p>
+        </section>
+    </main>
+
+    <script>
+        document.getElementById('deleteDataButton').addEventListener('click', function() {
+            fetch('/delete_data', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    Swal.fire({
+                        title: 'Thành công!',
+                        text: data.message,
+                        icon: 'success',
+                        confirmButtonText: 'OK'
+                    });
+                })
+                .catch(error => {
+                    Swal.fire({
+                        title: 'Lỗi!',
+                        text: 'Có lỗi xảy ra khi xóa dữ liệu.',
+                        icon: 'error',
+                        confirmButtonText: 'OK'
+                    });
+                    console.error('Error deleting data:', error);
+                });
+        });
+
+        document.getElementById('addFaceButton').addEventListener('click', function() {
+            window.location.href = '/add_face';
+        });
+    </script>
+</body>
+</html>
