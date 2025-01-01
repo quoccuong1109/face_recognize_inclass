@@ -1,8 +1,9 @@
 ./
     app.py
-    error_log.json
+    current_id.json
     project_summary_1.txt
     project_summary_2.txt
+    project_summary_3.txt
     requirements.txt
     Script.docx
     students.json
@@ -51,13 +52,6 @@
 import os
 import json
 from app import app
-
-# Kiểm tra và tạo tệp students.json nếu không tồn tại
-students_file = 'students.json'
-if not os.path.exists(students_file):
-    with open(students_file, 'w') as file:
-        json.dump([], file)
-    print(f"{students_file} không tồn tại. Đã tạo tệp mới.")
 
 if __name__ == '__main__':
     app.run(debug=True)    --- End of app.py ---
@@ -236,11 +230,11 @@ def collect_face_data(user_id, user_name):
         print(f"Lỗi: {e}")
         return False            --- End of add_face.py ---
             --- Start of attendance.py ---
+import os
+import json
 from flask import request, jsonify, render_template, Response
 import cv2
 import numpy as np
-import os
-import json
 from tensorflow.keras.models import load_model
 from app import app
 
@@ -253,8 +247,14 @@ if os.path.exists(model_path):
 else:
     model = None
 
-with open(students_file, 'r') as file:
-    students_data = json.load(file)
+# Đọc dữ liệu học sinh từ tệp JSON
+students_data = []
+if os.path.exists(students_file):
+    with open(students_file, 'r') as file:
+        try:
+            students_data = json.load(file)
+        except json.JSONDecodeError:
+            students_data = []
 
 @app.route('/attendance')
 def attendance():
@@ -305,29 +305,59 @@ def get_attendance():
     return jsonify({'students': students_data})            --- End of attendance.py ---
             --- Start of delete_data.py ---
 import os
+import json
 from flask import Blueprint, jsonify
-from pathlib import Path
+import shutil
 
 delete_data_bp = Blueprint('delete_data', __name__)
 
 @delete_data_bp.route('/delete_data', methods=['POST'])
 def delete_data():
+    log_dir = 'log'
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    
+    log_file_path = os.path.join(log_dir, 'error_log.json')
+    
     try:
-        # Đường dẫn tới thư mục raw_images
-        raw_images_path = Path('data/raw_images')
-        
-        # Xóa tất cả các tệp và thư mục con trong raw_images
-        for item in raw_images_path.glob('*'):
-            if item.is_file():
-                item.unlink()
-            elif item.is_dir():
-                for sub_item in item.glob('*'):
-                    if sub_item.is_file():
-                        sub_item.unlink()
-                    elif sub_item.is_dir():
-                        shutil.rmtree(sub_item)
-                item.rmdir()
-        
-        return jsonify({'message': 'Dữ liệu đã được xóa thành công!'})
+        # Đường dẫn tới tệp JSON
+        json_files = ['current_id.json', 'students.json']
+
+        # Xóa nội dung trong các tệp JSON
+        for json_file in json_files:
+            if os.path.exists(json_file):
+                try:
+                    with open(json_file, 'w') as file:
+                        json.dump({}, file)  # Ghi nội dung rỗng vào tệp
+                except Exception as e:
+                    raise Exception(f"Lỗi khi xóa nội dung trong tệp {json_file}: {str(e)}")
+
+        # Xóa tất cả các hình ảnh và thư mục con trong thư mục data
+        data_folders = ['data/processed_images', 'data/raw_images']
+        for folder in data_folders:
+            if os.path.exists(folder):
+                try:
+                    shutil.rmtree(folder)
+                    os.makedirs(folder)  # Tạo lại thư mục rỗng sau khi xóa
+                except Exception as e:
+                    raise Exception(f"Lỗi khi xóa thư mục {folder}: {str(e)}")
+
+        # Ghi log thành công
+        with open(log_file_path, 'a') as log_file:
+            log_entry = {'message': 'Đã xóa hết dữ liệu trong các tệp JSON và các hình ảnh trong thư mục data thành công!'}
+            json.dump(log_entry, log_file)
+            log_file.write('\n')
+
+        return jsonify({'message': 'Đã xóa hết dữ liệu trong các tệp JSON và các hình ảnh trong thư mục data thành công!'})
     except Exception as e:
-        return jsonify({'message': 'Có lỗi xảy ra khi xóa dữ liệu.', 'error': str(e)}), 500            --- End of delete_data.py ---
+        # Ghi lỗi ra file log
+        try:
+            with open(log_file_path, 'a') as log_file:
+                log_entry = {'error': str(e)}
+                json.dump(log_entry, log_file)
+                log_file.write('\n')
+        except Exception as log_error:
+            print(f"Không thể ghi lỗi vào file log: {log_error}")
+        
+        # Thông báo loại lỗi trên màn hình website
+        return jsonify({'message': f'Có lỗi xảy ra khi xóa dữ liệu: {str(e)}'}), 500            --- End of delete_data.py ---
