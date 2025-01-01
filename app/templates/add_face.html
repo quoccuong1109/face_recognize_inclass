@@ -22,9 +22,8 @@
                 <input type="text" id="user_id" name="user_id" readonly>
                 <label for="user_name">Tên:</label>
                 <input type="text" id="user_name" name="user_name" required>
-                <button type="button" id="startCameraButton" class="camera-button"><i class="fas fa-camera"></i> Bắt đầu camera</button>
                 <div id="camera" class="camera-container">
-                    <img id="videoFeed" src="" alt="Video Feed">
+                    <img id="videoFeed" src="{{ url_for('video_feed') }}" alt="Video Feed">
                 </div>
                 <button type="submit" class="submit-button"><i class="fas fa-user-plus"></i> Thêm khuôn mặt</button>
             </form>
@@ -34,10 +33,6 @@
     <script>
         document.getElementById('homeButton').addEventListener('click', function() {
             window.location.href = '/';
-        });
-
-        document.getElementById('startCameraButton').addEventListener('click', function() {
-            startCamera();
         });
 
         document.getElementById('addFaceForm').addEventListener('submit', function(event) {
@@ -78,11 +73,6 @@
                     console.error('Error fetching next ID:', error);
                 });
         });
-
-        function startCamera() {
-            const videoFeed = document.getElementById('videoFeed');
-            videoFeed.src = "{{ url_for('video_feed') }}";
-        }
     </script>
 </body>
 </html>

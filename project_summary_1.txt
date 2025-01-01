@@ -1,0 +1,333 @@
+./
+    app.py
+    error_log.json
+    project_summary_1.txt
+    project_summary_2.txt
+    requirements.txt
+    Script.docx
+    students.json
+    update_script.py
+    app/
+        __init__.py
+        routes/
+            add_face.py
+            attendance.py
+            delete_data.py
+            get_next_id.py
+            home.py
+            train_model.py
+            video_feed.py
+            __pycache__/
+                add_face.cpython-311.pyc
+                attendance.cpython-311.pyc
+                delete_data.cpython-311.pyc
+                get_next_id.cpython-311.pyc
+                home.cpython-311.pyc
+                train_model.cpython-311.pyc
+                video_feed.cpython-311.pyc
+        static/
+            styles.css
+        templates/
+            add_face.html
+            diemdanh.html
+            index.html
+        __pycache__/
+            routes.cpython-311.pyc
+            __init__.cpython-311.pyc
+    data/
+        processed_images/
+        raw_images/
+    models/
+        face_recognition_model.py
+        __init__.py
+    scripts/
+        capture_images.py
+        data_preprocessing.py
+        train_model.py
+        __pycache__/
+            data_preprocessing.cpython-311.pyc
+            train_model.cpython-311.pyc
+    --- Start of app.py ---
+import os
+import json
+from app import app
+
+# Kiểm tra và tạo tệp students.json nếu không tồn tại
+students_file = 'students.json'
+if not os.path.exists(students_file):
+    with open(students_file, 'w') as file:
+        json.dump([], file)
+    print(f"{students_file} không tồn tại. Đã tạo tệp mới.")
+
+if __name__ == '__main__':
+    app.run(debug=True)    --- End of app.py ---
+    --- Start of update_script.py ---
+import os
+from pathlib import Path
+
+def save_to_file(content, file_index):
+    with open(f'project_summary_{file_index}.txt', 'w', encoding='utf-8') as f:
+        f.write(content)
+
+def get_file_content(file_path):
+    with open(file_path, 'r', encoding='utf-8') as f:
+        return f.read()
+
+def update_script():
+    base_path = Path('.')
+    content = ""
+    char_count = 0
+    file_index = 1
+
+    important_files = ['app.py', 'requirements.txt', 'update_script.py']
+    important_dirs = ['app', 'static', 'templates', 'models', 'scripts', 'routes']
+
+    # First, list the directory structure
+    for root, dirs, files in os.walk(base_path):
+        # Skip .git directory
+        if '.git' in root:
+            continue
+        
+        level = root.replace(str(base_path), '').count(os.sep)
+        indent = ' ' * 4 * level
+        dir_name = os.path.basename(root)
+        
+        line = f'{indent}{dir_name}/\n'
+        content += line
+        char_count += len(line)
+
+        for file in files:
+            file_indent = ' ' * 4 * (level + 1)
+            line = f'{file_indent}{file}\n'
+            content += line
+            char_count += len(line)
+
+            if char_count > 10000:
+                save_to_file(content, file_index)
+                content = ""
+                char_count = 0
+                file_index += 1
+
+    # Then, add the content of each file
+    for root, dirs, files in os.walk(base_path):
+        # Skip .git directory
+        if '.git' in root:
+            continue
+        
+        level = root.replace(str(base_path), '').count(os.sep)
+        indent = ' ' * 4 * level
+
+        for file in files:
+            file_path = Path(root) / file
+            file_indent = ' ' * 4 * (level + 1)
+
+            if file.endswith('.py') or file.endswith('.html') or file.endswith('.css'):
+                file_content = get_file_content(file_path)
+                header = f'{file_indent}--- Start of {file} ---\n'
+                footer = f'{file_indent}--- End of {file} ---\n'
+                content += header + file_content + footer
+                char_count += len(header) + len(file_content) + len(footer)
+
+            if char_count > 10000:
+                save_to_file(content, file_index)
+                content = ""
+                char_count = 0
+                file_index += 1
+
+    if content:
+        save_to_file(content, file_index)
+
+if __name__ == '__main__':
+    update_script()    --- End of update_script.py ---
+        --- Start of __init__.py ---
+from flask import Flask
+
+app = Flask(__name__)
+
+# Import các route mới
+from app.routes import home
+from app.routes import add_face
+from app.routes import train_model
+from app.routes import delete_data
+from app.routes import video_feed
+from app.routes import get_next_id
+from app.routes import attendance        --- End of __init__.py ---
+            --- Start of add_face.py ---
+from flask import request, jsonify, render_template
+from app import app
+import os
+import json
+import cv2
+
+def get_next_id():
+    current_id = 0
+    if os.path.exists('current_id.json'):
+        with open('current_id.json', 'r') as file:
+            current_id = json.load(file).get('current_id', 0)
+    next_id = current_id + 1
+    with open('current_id.json', 'w') as file:
+        json.dump({'current_id': next_id}, file)
+    return next_id
+
+@app.route('/add_face', methods=['GET', 'POST'])
+def add_face():
+    if request.method == 'POST':
+        user_id = get_next_id()
+        user_name = request.form['user_name']
+        success = collect_face_data(user_id, user_name)
+        if success:
+            return jsonify({'message': f'Đã thêm dữ liệu khuôn mặt thành công cho người dùng {user_name} (ID: {user_id})!'})
+        else:
+            return jsonify({'message': 'Có lỗi xảy ra khi thêm dữ liệu khuôn mặt.'}), 500
+    return render_template('add_face.html')
+
+def collect_face_data(user_id, user_name):
+    try:
+        raw_images_dir = 'data/raw_images'
+        user_dir = os.path.join(raw_images_dir, f'user_{user_id}_{user_name}')
+        if not os.path.exists(user_dir):
+            os.makedirs(user_dir)
+
+        camera = cv2.VideoCapture(0)
+        if not camera.isOpened():
+            raise Exception("Không thể mở camera")
+
+        count = 0
+        while count < 10:  # Chụp 10 tấm ảnh
+            success, frame = camera.read()
+            if not success:
+                raise Exception("Không thể đọc khung hình từ camera")
+
+            face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+            faces = face_cascade.detectMultiScale(frame, 1.1, 4)
+
+            for (x, y, w, h) in faces:
+                cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
+                face_img = frame[y:y+h, x:x+w]
+                img_path = os.path.join(user_dir, f'{user_id}_face_{count}.jpg')
+                cv2.imwrite(img_path, face_img)
+                count += 1
+
+            cv2.imshow('Thu thập dữ liệu khuôn mặt', frame)
+            cv2.waitKey(1000)  # Chờ 1 giây giữa các lần chụp
+
+        camera.release()
+        cv2.destroyAllWindows()
+        
+        # Log the new user to students.json
+        students_data = []
+        if os.path.exists('students.json'):
+            with open('students.json', 'r') as file:
+                try:
+                    students_data = json.load(file)
+                except json.JSONDecodeError:
+                    pass
+        
+        students_data.append({'id': user_id, 'name': user_name})
+        
+        with open('students.json', 'w') as file:
+            json.dump(students_data, file)
+
+        print(f"Đã thu thập {count} hình ảnh khuôn mặt cho người dùng {user_name} (ID: {user_id})")
+        
+        return True
+
+    except Exception as e:
+        print(f"Lỗi: {e}")
+        return False            --- End of add_face.py ---
+            --- Start of attendance.py ---
+from flask import request, jsonify, render_template, Response
+import cv2
+import numpy as np
+import os
+import json
+from tensorflow.keras.models import load_model
+from app import app
+
+model_path = 'models/face_recognition_model.h5'
+students_file = 'students.json'
+
+# Kiểm tra nếu model tồn tại
+if os.path.exists(model_path):
+    model = load_model(model_path)
+else:
+    model = None
+
+with open(students_file, 'r') as file:
+    students_data = json.load(file)
+
+@app.route('/attendance')
+def attendance():
+    return render_template('diemdanh.html')
+
+@app.route('/attendance_feed')
+def attendance_feed():
+    return Response(gen_attendance_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+def gen_attendance_frames():
+    camera = cv2.VideoCapture(0)
+    while True:
+        success, frame = camera.read()
+        if not success:
+            break
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        faces = face_cascade.detectMultiScale(gray, 1.1, 4)
+        
+        names = []
+        for (x, y, w, h) in faces:
+            face_img = frame[y:y+h, x:x+w]
+            face_img = cv2.resize(face_img, (128, 128))
+            face_img = face_img / 255.0
+            face_img = np.expand_dims(face_img, axis=0)
+            
+            if model:
+                predictions = model.predict(face_img)
+                predicted_id = np.argmax(predictions)
+                name = next((student['name'] for student in students_data if student['id'] == predicted_id), "Unknown")
+            else:
+                name = "Unknown"
+            names.append(name)
+            
+            cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
+            cv2.putText(frame, name, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
+        
+        ret, buffer = cv2.imencode('.jpg', frame)
+        frame = buffer.tobytes()
+        
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+    
+    camera.release()
+
+@app.route('/get_attendance', methods=['GET'])
+def get_attendance():
+    return jsonify({'students': students_data})            --- End of attendance.py ---
+            --- Start of delete_data.py ---
+import os
+from flask import Blueprint, jsonify
+from pathlib import Path
+
+delete_data_bp = Blueprint('delete_data', __name__)
+
+@delete_data_bp.route('/delete_data', methods=['POST'])
+def delete_data():
+    try:
+        # Đường dẫn tới thư mục raw_images
+        raw_images_path = Path('data/raw_images')
+        
+        # Xóa tất cả các tệp và thư mục con trong raw_images
+        for item in raw_images_path.glob('*'):
+            if item.is_file():
+                item.unlink()
+            elif item.is_dir():
+                for sub_item in item.glob('*'):
+                    if sub_item.is_file():
+                        sub_item.unlink()
+                    elif sub_item.is_dir():
+                        shutil.rmtree(sub_item)
+                item.rmdir()
+        
+        return jsonify({'message': 'Dữ liệu đã được xóa thành công!'})
+    except Exception as e:
+        return jsonify({'message': 'Có lỗi xảy ra khi xóa dữ liệu.', 'error': str(e)}), 500            --- End of delete_data.py ---

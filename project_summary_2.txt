@@ -1,0 +1,363 @@
+            --- Start of get_next_id.py ---
+from flask import jsonify
+from app import app
+import os
+import json
+
+def get_next_id():
+    current_id = 0
+    if os.path.exists('current_id.json'):
+        with open('current_id.json', 'r') as file:
+            current_id = json.load(file).get('current_id', 0)
+    next_id = current_id + 1
+    with open('current_id.json', 'w') as file:
+        json.dump({'current_id': next_id}, file)
+    return next_id
+
+@app.route('/get_next_id', methods=['GET'])
+def get_next_id_route():
+    next_id = get_next_id()
+    return jsonify({'next_id': next_id})            --- End of get_next_id.py ---
+            --- Start of home.py ---
+from flask import render_template
+from app import app
+
+@app.route('/')
+def home():
+    return render_template('index.html')            --- End of home.py ---
+            --- Start of train_model.py ---
+from flask import request, jsonify
+from app import app
+import os
+import cv2
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
+
+model_path = 'models/face_recognition_model.h5'
+
+@app.route('/train_model', methods=['POST'])
+def train_model_route():
+    try:
+        preprocess_images('data/raw_images', 'data/processed_images')
+        images, labels = load_data('data/processed_images')
+        images = images.reshape(-1, 128, 128, 1)
+
+        model = Sequential([
+            Conv2D(32, (3, 3), activation='relu', input_shape=(128, 128, 1)),
+            MaxPooling2D((2, 2)),
+            Conv2D(64, (3, 3), activation='relu'),
+            MaxPooling2D((2, 2)),
+            Flatten(),
+            Dense(128, activation='relu'),
+            Dense(len(set(labels)), activation='softmax')
+        ])
+
+        model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+        model.fit(images, labels, epochs=10, validation_split=0.2)
+
+        model.save(model_path)
+        return jsonify({'message': 'Đã huấn luyện và lưu mô hình thành công!'})
+    except Exception as e:
+        return jsonify({'message': f'Có lỗi xảy ra khi huấn luyện mô hình: {str(e)}'}), 500
+
+def preprocess_images(input_folder, output_folder):
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    for root, dirs, files in os.walk(input_folder):
+        for file in files:
+            file_path = os.path.join(root, file)
+            img = cv2.imread(file_path)
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            resized = cv2.resize(gray, (128, 128))
+            output_path = os.path.join(output_folder, file)
+            cv2.imwrite(output_path, resized)
+
+def load_data(data_folder):
+    images = []
+    labels = []
+    for root, dirs, files in os.walk(data_folder):
+        for file in files:
+            file_path = os.path.join(root, file)
+            img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
+            img = img / 255.0
+            images.append(img)
+            label = int(file.split('_')[0])
+            labels.append(label)
+    return np.array(images), np.array(labels)            --- End of train_model.py ---
+            --- Start of video_feed.py ---
+from flask import Response
+from app import app
+import cv2
+
+@app.route('/video_feed')
+def video_feed():
+    return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+def gen_frames():
+    camera = cv2.VideoCapture(0)
+    while True:
+        success, frame = camera.read()
+        if not success:
+            break
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        faces = face_cascade.detectMultiScale(gray, 1.1, 4)
+        for (x, y, w, h) in faces:
+            cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
+        ret, buffer = cv2.imencode('.jpg', frame)
+        frame = buffer.tobytes()
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+    camera.release()            --- End of video_feed.py ---
+            --- Start of styles.css ---
+body {
+    font-family: 'Roboto', sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f9;
+    color: #333;
+    overflow-x: hidden;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    background-color: #4CAF50;
+    color: white;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 24px;
+}
+
+.delete-button, .home-button, .camera-button, .submit-button {
+    background-color: #be1e1e;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 16px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    transition: background-color 0.3s ease;
+}
+
+.delete-button i, .home-button i, .camera-button i, .submit-button i {
+    margin-right: 8px;
+}
+
+.delete-button:hover, .home-button:hover, .camera-button:hover, .submit-button:hover {
+    background-color: #cabd06;
+}
+
+main {
+    padding: 20px;
+}
+
+.hero {
+    text-align: center;
+    padding: 50px 20px;
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+}
+
+.hero:hover {
+    transform: translateY(-10px);
+}
+
+.hero h2 {
+    font-size: 32px;
+    margin-bottom: 20px;
+}
+
+.hero p {
+    font-size: 18px;
+    color: #666;
+}
+
+.form-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.form-container label {
+    font-size: 18px;
+    margin: 10px 0 5px;
+}
+
+.form-container input {
+    padding: 10px;
+    font-size: 16px;
+    margin-bottom: 20px;
+    width: 100%;
+    max-width: 400px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+.camera-container {
+    margin: 20px 0;
+    width: 100%;
+    max-width: 400px;
+    height: 300px;
+    background-color: #e0e0e0;
+    border: 2px dashed #ccc;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+.camera-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}            --- End of styles.css ---
+            --- Start of add_face.html ---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thêm dữ liệu khuôn mặt</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+    <header class="animate__animated animate__fadeInDown">
+        <h1>Thêm dữ liệu khuôn mặt</h1>
+        <button id="homeButton" class="home-button"><i class="fas fa-home"></i> Trở về trang chủ</button>
+    </header>
+
+    <main>
+        <section class="hero animate__animated animate__fadeInUp">
+            <form id="addFaceForm" class="form-container">
+                <label for="user_id">ID:</label>
+                <input type="text" id="user_id" name="user_id" readonly>
+                <label for="user_name">Tên:</label>
+                <input type="text" id="user_name" name="user_name" required>
+                <div id="camera" class="camera-container">
+                    <img id="videoFeed" src="{{ url_for('video_feed') }}" alt="Video Feed">
+                </div>
+                <button type="submit" class="submit-button"><i class="fas fa-user-plus"></i> Thêm khuôn mặt</button>
+            </form>
+        </section>
+    </main>
+
+    <script>
+        document.getElementById('homeButton').addEventListener('click', function() {
+            window.location.href = '/';
+        });
+
+        document.getElementById('addFaceForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const formData = new FormData(this);
+            fetch('/add_face', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                Swal.fire({
+                    title: 'Thành công!',
+                    text: data.message,
+                    icon: 'success',
+                    confirmButtonText: 'OK'
+                });
+            })
+            .catch(error => {
+                Swal.fire({
+                    title: 'Lỗi!',
+                    text: 'Có lỗi xảy ra khi thêm dữ liệu khuôn mặt.',
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                });
+                console.error('Error adding face data:', error);
+            });
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('/get_next_id')
+                .then(response => response.json())
+                .then(data => {
+                    const userIdInput = document.getElementById('user_id');
+                    userIdInput.value = data.next_id;
+                })
+                .catch(error => {
+                    console.error('Error fetching next ID:', error);
+                });
+        });
+    </script>
+</body>
+</html>            --- End of add_face.html ---
+            --- Start of diemdanh.html ---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Điểm danh</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+    <header class="animate__animated animate__fadeInDown">
+        <h1>Điểm danh</h1>
+        <button id="homeButton" class="home-button"><i class="fas fa-home"></i> Trở về trang chủ</button>
+    </header>
+
+    <main>
+        <section class="hero animate__animated animate__fadeInUp">
+            <div id="camera" class="camera-container">
+                <img id="videoFeed" src="{{ url_for('attendance_feed') }}" alt="Video Feed">
+            </div>
+            <div id="attendanceInfo" class="attendance-info">
+                <h2>Thông tin điểm danh</h2>
+                <p id="studentCount">Số lượng học sinh: 0</p>
+                <ul id="studentList"></ul>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        document.getElementById('homeButton').addEventListener('click', function() {
+            window.location.href = '/';
+        });
+
+        function updateAttendanceInfo() {
+            fetch('/get_attendance')
+                .then(response => response.json())
+                .then(data => {
+                    const studentCountElement = document.getElementById('studentCount');
+                    const studentListElement = document.getElementById('studentList');
+                    studentCountElement.textContent = `Số lượng học sinh: ${data.students.length}`;
+                    studentListElement.innerHTML = '';
+                    data.students.forEach(student => {
+                        const listItem = document.createElement('li');
+                        listItem.textContent = student.name;
+                        studentListElement.appendChild(listItem);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching attendance info:', error);
+                });
+        }
+
+        setInterval(updateAttendanceInfo, 5000); // Cập nhật thông tin điểm danh mỗi 5 giây
+    </script>
+</body>
+</html>            --- End of diemdanh.html ---
