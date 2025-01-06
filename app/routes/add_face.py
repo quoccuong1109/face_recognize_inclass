@@ -7,6 +7,7 @@ import os
 import json
 import cv2
 import threading
+from PIL import Image
 
 def get_next_id(update=False):
     current_id = 0
@@ -43,12 +44,15 @@ def capture_face_images(user_id, user_name):
             cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
             face_img = frame[y:y+h, x:x+w]
             img_path = os.path.join(user_dir, f'{user_id}_face_{count}.jpg')
-            cv2.imwrite(img_path, face_img)
-            print(f"Lưu ảnh: {img_path}")  # Thêm dòng này để kiểm tra việc lưu ảnh
+            
+            # Sử dụng PIL để lưu ảnh
+            face_img_pil = Image.fromarray(cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB))
+            face_img_pil.save(img_path)
+            print(f"Lưu ảnh: {img_path}")
             count += 1
 
         cv2.imshow('Thu thập dữ liệu khuôn mặt', frame)
-        cv2.waitKey(1000)  # Chờ 1 giây giữa các lần chụp
+        cv2.waitKey(500)  # Chờ 500ms giữa các lần chụp
 
     camera.release()
     cv2.destroyAllWindows()
@@ -68,6 +72,7 @@ def capture_face_images(user_id, user_name):
         json.dump(students_data, file, ensure_ascii=False)
 
     print(f"Đã thu thập {count} hình ảnh khuôn mặt cho người dùng {user_name} (ID: {user_id})")
+
 
 def capture_face_images_thread(user_id, user_name):
     thread = threading.Thread(target=capture_face_images, args=(user_id, user_name))
