@@ -1,3 +1,88 @@
+            --- Start of attendance.py ---
+import os
+import json
+from flask import request, jsonify, render_template, Response
+import cv2
+import numpy as np
+from tensorflow.keras.models import load_model
+from app import app
+
+model_path = os.path.join('models', 'face_recognition_model.h5')
+
+# Kiểm tra nếu model tồn tại
+if os.path.exists(model_path):
+    model = load_model(model_path)
+    print("Mô hình đã được tải thành công.")
+else:
+    model = None
+    print("Không tìm thấy tệp mô hình.")
+
+# Đọc dữ liệu học sinh từ tệp JSON
+students_file = 'students.json'
+students_data = []
+if os.path.exists(students_file):
+    with open(students_file, 'r', encoding='utf-8') as file:
+        try:
+            students_data = json.load(file)
+        except json.JSONDecodeError:
+            students_data = []
+
+@app.route('/diemdanh_tudong')
+def diemdanh_tudong():
+    return render_template('diemdanh_tudong.html')
+
+@app.route('/attendance_feed')
+def attendance_feed():
+    return Response(gen_attendance_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+def gen_attendance_frames():
+    if not model:
+        raise Exception("Model chưa được huấn luyện. Vui lòng huấn luyện mô hình trước khi điểm danh.")
+
+    camera = cv2.VideoCapture(0)
+    if not camera.isOpened():
+        raise Exception("Không thể mở camera")
+
+    while True:
+        success, frame = camera.read()
+        if not success:
+            break
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        faces = face_cascade.detectMultiScale(gray, 1.1, 4)
+        
+        print(f"Detected faces: {faces}")  # In ra để kiểm tra
+
+        names = []
+        for (x, y, w, h) in faces:
+            face_img = frame[y:y+h, x:x+w]
+            face_img = cv2.resize(face_img, (128, 128))
+            face_img = cv2.cvtColor(face_img, cv2.COLOR_BGR2GRAY)  # Chuyển đổi sang grayscale nếu cần
+            face_img = face_img / 255.0
+            face_img = face_img.reshape(1, 128, 128, 1)  # Đảm bảo định dạng đầu vào đúng
+            
+            predicted_prob = model.predict(face_img)[0]
+            predicted_id = np.argmax(predicted_prob)
+            confidence = np.max(predicted_prob) * 100  # Tính toán tỷ lệ chính xác
+            name = next((student['name'] for student in students_data if student['id'] == predicted_id), "Unknown")
+            names.append(name)
+            
+            print(f"Predicted name: {name}, Confidence: {confidence}")  # In ra để kiểm tra
+            
+            cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
+            cv2.putText(frame, f'{name} ({confidence:.2f}%)', (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
+        
+        ret, buffer = cv2.imencode('.jpg', frame)
+        frame = buffer.tobytes()
+        
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+    
+    camera.release()
+
+@app.route('/get_attendance', methods=['GET'])
+def get_attendance():
+    return jsonify({'students': students_data})            --- End of attendance.py ---
             --- Start of delete_data.py ---
 import os
 import json
@@ -83,6 +168,9 @@ import cv2
 import numpy as np
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
+import imgaug.augmenters as iaa
+from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
 
 model_path = 'models/face_recognition_model.h5'
 
@@ -90,8 +178,14 @@ model_path = 'models/face_recognition_model.h5'
 def train_model_route():
     try:
         preprocess_images('data/raw_images', 'data/processed_images')
-        images, labels = load_data('data/processed_images')
+        augment_images('data/processed_images', 'data/augmented_images')
+        images, labels = load_data('data/augmented_images')
         images = images.reshape(-1, 128, 128, 1)
+
+        # Tách dữ liệu thành tập huấn luyện và tập kiểm tra
+        X_train, X_test, y_train, y_test = train_test_split(images, labels, test_size=0.2, random_state=42)
+
+        print(f"Labels: {labels}")  # In ra để kiểm tra
 
         model = Sequential([
             Conv2D(32, (3, 3), activation='relu', input_shape=(128, 128, 1)),
@@ -104,10 +198,25 @@ def train_model_route():
         ])
 
         model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-        model.fit(images, labels, epochs=10, validation_split=0.2)
+        model.fit(X_train, y_train, epochs=10, validation_split=0.2)
+
+        # Đánh giá mô hình với tập kiểm tra
+        test_loss, test_accuracy = model.evaluate(X_test, y_test)
+        print(f'Test accuracy: {test_accuracy}')
+
+        # Kiểm tra các trường hợp dự đoán sai
+        y_pred = model.predict(X_test)
+        y_pred_classes = np.argmax(y_pred, axis=1)
+        incorrect_indices = np.where(y_pred_classes != y_test)[0]
+
+        for i in incorrect_indices:
+            print(f'Actual: {y_test[i]}, Predicted: {y_pred_classes[i]}')
+            plt.imshow(X_test[i].reshape(128, 128), cmap='gray')
+            plt.title(f'Actual: {y_test[i]}, Predicted: {y_pred_classes[i]}')
+            plt.show()
 
         model.save(model_path)
-        return jsonify({'message': 'Đã huấn luyện và lưu mô hình thành công!'})
+        return jsonify({'message': 'Đã huấn luyện và lưu mô hình thành công!', 'test_accuracy': test_accuracy})
     except Exception as e:
         return jsonify({'message': f'Có lỗi xảy ra khi huấn luyện mô hình: {str(e)}'}), 500
 
@@ -119,10 +228,34 @@ def preprocess_images(input_folder, output_folder):
         for file in files:
             file_path = os.path.join(root, file)
             img = cv2.imread(file_path)
+            if img is None:
+                continue
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             resized = cv2.resize(gray, (128, 128))
             output_path = os.path.join(output_folder, file)
             cv2.imwrite(output_path, resized)
+
+def augment_images(input_folder, output_folder):
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    seq = iaa.Sequential([
+        iaa.Fliplr(0.5),  # Lật ngang hình ảnh với xác suất 50%
+        iaa.Affine(rotate=(-20, 20)),  # Xoay hình ảnh trong khoảng -20 đến 20 độ
+        iaa.Multiply((0.8, 1.2)),  # Thay đổi độ sáng của hình ảnh
+        iaa.GaussianBlur(sigma=(0, 1.0))  # Làm mờ hình ảnh với độ mờ ngẫu nhiên
+    ])
+
+    for root, dirs, files in os.walk(input_folder):
+        for file in files:
+            file_path = os.path.join(root, file)
+            img = cv2.imread(file_path)
+            if img is None:
+                continue
+            images_aug = seq(images=[img] * 5)  # Tạo 5 biến thể của mỗi hình ảnh
+            for i, img_aug in enumerate(images_aug):
+                output_path = os.path.join(output_folder, f"{os.path.splitext(file)[0]}_aug_{i}.jpg")
+                cv2.imwrite(output_path, img_aug)
 
 def load_data(data_folder):
     images = []
@@ -133,271 +266,6 @@ def load_data(data_folder):
             img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
             img = img / 255.0
             images.append(img)
-            label = int(file.split('_')[0])
+            label = int(file.split('_')[0]) - 1  # Đảm bảo nhãn bắt đầu từ 0
             labels.append(label)
     return np.array(images), np.array(labels)            --- End of train_model.py ---
-            --- Start of video_feed.py ---
-from flask import Response
-from app import app
-import cv2
-
-@app.route('/video_feed')
-def video_feed():
-    return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-def gen_frames():
-    camera = cv2.VideoCapture(0, cv2.CAP_DSHOW)  # Sử dụng backend DirectShow
-    if not camera.isOpened():
-        raise Exception("Không thể mở camera")
-
-    while True:
-        success, frame = camera.read()
-        if not success:
-            break
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-        faces = face_cascade.detectMultiScale(gray, 1.1, 4)
-        for (x, y, w, h) in faces:
-            cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
-        ret, buffer = cv2.imencode('.jpg', frame)
-        frame = buffer.tobytes()
-        
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-    
-    camera.release()            --- End of video_feed.py ---
-            --- Start of styles.css ---
-body {
-    font-family: 'Roboto', sans-serif;
-    margin: 0;
-    padding: 0;
-    background-color: #f4f4f9;
-    color: #333;
-    overflow-x: hidden;
-    font-size: 16px; /* Default font size */
-}
-
-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 20px;
-    background-color: #4CAF50;
-    color: white;
-}
-
-header h1 {
-    margin: 0;
-    font-size: 24px;
-}
-
-.delete-button, .home-button, .camera-button, .submit-button {
-    background-color: #be1e1e;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    cursor: pointer;
-    font-size: 16px;
-    border-radius: 5px;
-    display: flex;
-    align-items: center;
-    transition: background-color 0.3s ease;
-}
-
-.delete-button i, .home-button i, .camera-button i, .submit-button i {
-    margin-right: 8px;
-}
-
-.delete-button:hover, .home-button:hover, .camera-button:hover, .submit-button:hover {
-    background-color: #cabd06;
-}
-
-main {
-    padding: 20px;
-}
-
-.hero {
-    text-align: center;
-    padding: 50px 20px;
-    background-color: white;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    transition: transform 0.3s ease;
-}
-
-.hero:hover {
-    transform: translateY(-10px);
-}
-
-.hero h2 {
-    font-size: 32px;
-    margin-bottom: 20px;
-}
-
-.hero p {
-    font-size: 18px;
-    color: #666;
-}
-
-.form-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
-.form-container label {
-    font-size: 18px;
-    margin: 10px 0 5px;
-}
-
-.form-container input {
-    padding: 10px;
-    font-size: 16px;
-    margin-bottom: 20px;
-    width: 100%;
-    max-width: 400px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-}
-
-.camera-container {
-    margin: 20px auto; /* Center the camera container */
-    width: 100%;
-    max-width: 400px;
-    height: 300px;
-    background-color: #e0e0e0;
-    border: 2px dashed #ccc;
-    display: flex;
-    justify-content: center; /* Center content horizontally */
-    align-items: center; /* Center content vertically */
-    overflow: hidden;
-}
-
-.camera-container img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-    body {
-        font-size: 14px; /* Smaller font size for smaller screens */
-    }
-
-    header {
-        flex-direction: column; /* Stack header elements vertically */
-        align-items: flex-start; /* Align items to the start */
-    }
-
-    .hero {
-        padding: 20px; /* Reduce padding for smaller screens */
-    }
-
-    header h1 {
-        font-size: 20px; /* Smaller header font size */
-    }
-
-    .hero h2 {
-        font-size: 24px; /* Smaller hero heading size */
-    }
-}
-
-@media (max-width: 480px) {
-    body {
-        font-size: 12px; /* Even smaller font size for very small screens */
-    }
-
-    header h1 {
-        font-size: 18px; /* Even smaller header font size */
-    }
-
-    .hero h2 {
-        font-size: 20px; /* Even smaller hero heading size */
-    }
-}            --- End of styles.css ---
-            --- Start of add_face.html ---
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Thêm dữ liệu khuôn mặt</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-</head>
-<body>
-    <header class="animate__animated animate__fadeInDown">
-        <h1>Thêm dữ liệu khuôn mặt</h1>
-        <button id="homeButton" class="home-button"><i class="fas fa-home"></i> Trở về trang chủ</button>
-    </header>
-
-    <main>
-        <section class="hero animate__animated animate__fadeInUp">
-            <form id="addFaceForm" class="form-container">
-                <label for="user_id">ID:</label>
-                <input type="text" id="user_id" name="user_id" readonly>
-                <label for="user_name">Tên:</label>
-                <input type="text" id="user_name" name="user_name" required>
-                <div id="camera" class="camera-container">
-                    <img id="videoFeed" src="{{ url_for('video_feed') }}" alt="Video Feed">
-                </div>
-                <button type="submit" class="submit-button"><i class="fas fa-user-plus"></i> Thêm khuôn mặt</button>
-            </form>
-        </section>
-    </main>
-
-    <script>
-        document.getElementById('homeButton').addEventListener('click', function() {
-            window.location.href = '/';
-        });
-
-        document.getElementById('addFaceForm').addEventListener('submit', function(event) {
-            event.preventDefault();
-            const formData = new FormData(this);
-            fetch('/add_face', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                Swal.fire({
-                    title: 'Thành công!',
-                    text: data.message,
-                    icon: 'success',
-                    confirmButtonText: 'OK'
-                }).then(() => {
-                    fetchNextId();  // Lấy ID mới sau khi thêm khuôn mặt thành công
-                });
-            })
-            .catch(error => {
-                Swal.fire({
-                    title: 'Lỗi!',
-                    text: 'Có lỗi xảy ra khi thêm dữ liệu khuôn mặt.',
-                    icon: 'error',
-                    confirmButtonText: 'OK'
-                });
-                console.error('Error adding face data:', error);
-            });
-        });
-
-        function fetchNextId() {
-            fetch('/get_next_id')
-                .then(response => response.json())
-                .then(data => {
-                    const userIdInput = document.getElementById('user_id');
-                    userIdInput.value = data.next_id;
-                })
-                .catch(error => {
-                    console.error('Error fetching next ID:', error);
-                });
-        }
-
-        document.addEventListener('DOMContentLoaded', function() {
-            fetchNextId();  // Lấy ID mới khi trang được tải
-        });
-    </script>
-</body>
-</html>            --- End of add_face.html ---

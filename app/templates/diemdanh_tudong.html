@@ -18,7 +18,7 @@
     <main>
         <section class="hero animate__animated animate__fadeInUp">
             <div id="camera" class="camera-container">
-                <img id="videoFeed" src="{{ url_for('video_feed') }}" alt="Video Feed">
+                <img id="videoFeed" src="{{ url_for('attendance_feed') }}" alt="Video Feed">
             </div>
             <div id="attendanceInfo" class="attendance-info">
                 <h2>Thông tin điểm danh</h2>
@@ -52,7 +52,8 @@
                 });
         }
 
-        setInterval(updateAttendanceInfo, 5000); // Cập nhật thông tin điểm danh mỗi 5 giây
+        setInterval(updateAttendanceInfo, 3000); // Cập nhật thông tin điểm danh mỗi 5 giây
     </script>
+
 </body>
 </html>

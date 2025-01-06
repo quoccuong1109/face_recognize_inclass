@@ -1,10 +1,190 @@
-            --- Start of diemdanh.html ---
+            --- Start of video_feed.py ---
+from flask import Response
+from app import app
+import cv2
+
+@app.route('/video_feed')
+def video_feed():
+    return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+def gen_frames():
+    camera = cv2.VideoCapture(0, cv2.CAP_DSHOW)  # Sử dụng backend DirectShow
+    if not camera.isOpened():
+        raise Exception("Không thể mở camera")
+
+    while True:
+        success, frame = camera.read()
+        if not success:
+            break
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        faces = face_cascade.detectMultiScale(gray, 1.1, 4)
+        for (x, y, w, h) in faces:
+            cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
+        ret, buffer = cv2.imencode('.jpg', frame)
+        frame = buffer.tobytes()
+        
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+    
+    camera.release()            --- End of video_feed.py ---
+            --- Start of styles.css ---
+body {
+    font-family: 'Roboto', sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f9;
+    color: #333;
+    overflow-x: hidden;
+    font-size: 16px; /* Default font size */
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    background-color: #4CAF50;
+    color: white;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 24px;
+}
+
+.delete-button, .home-button, .camera-button, .submit-button {
+    background-color: #be1e1e;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 16px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    transition: background-color 0.3s ease;
+}
+
+.delete-button i, .home-button i, .camera-button i, .submit-button i {
+    margin-right: 8px;
+}
+
+.delete-button:hover, .home-button:hover, .camera-button:hover, .submit-button:hover {
+    background-color: #cabd06;
+}
+
+main {
+    padding: 20px;
+}
+
+.hero {
+    text-align: center;
+    padding: 50px 20px;
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+}
+
+.hero:hover {
+    transform: translateY(-10px);
+}
+
+.hero h2 {
+    font-size: 32px;
+    margin-bottom: 20px;
+}
+
+.hero p {
+    font-size: 18px;
+    color: #666;
+}
+
+.form-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.form-container label {
+    font-size: 18px;
+    margin: 10px 0 5px;
+}
+
+.form-container input {
+    padding: 10px;
+    font-size: 16px;
+    margin-bottom: 20px;
+    width: 100%;
+    max-width: 400px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+.camera-container {
+    margin: 20px auto; /* Center the camera container */
+    width: 100%;
+    max-width: 400px;
+    height: 300px;
+    background-color: #e0e0e0;
+    border: 2px dashed #ccc;
+    display: flex;
+    justify-content: center; /* Center content horizontally */
+    align-items: center; /* Center content vertically */
+    overflow: hidden;
+}
+
+.camera-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    body {
+        font-size: 14px; /* Smaller font size for smaller screens */
+    }
+
+    header {
+        flex-direction: column; /* Stack header elements vertically */
+        align-items: flex-start; /* Align items to the start */
+    }
+
+    .hero {
+        padding: 20px; /* Reduce padding for smaller screens */
+    }
+
+    header h1 {
+        font-size: 20px; /* Smaller header font size */
+    }
+
+    .hero h2 {
+        font-size: 24px; /* Smaller hero heading size */
+    }
+}
+
+@media (max-width: 480px) {
+    body {
+        font-size: 12px; /* Even smaller font size for very small screens */
+    }
+
+    header h1 {
+        font-size: 18px; /* Even smaller header font size */
+    }
+
+    .hero h2 {
+        font-size: 20px; /* Even smaller hero heading size */
+    }
+}            --- End of styles.css ---
+            --- Start of add_face.html ---
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Điểm danh</title>
+    <title>Thêm dữ liệu khuôn mặt</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
@@ -12,7 +192,92 @@
 </head>
 <body>
     <header class="animate__animated animate__fadeInDown">
-        <h1>Điểm danh</h1>
+        <h1>Thêm dữ liệu khuôn mặt</h1>
+        <button id="homeButton" class="home-button"><i class="fas fa-home"></i> Trở về trang chủ</button>
+    </header>
+
+    <main>
+        <section class="hero animate__animated animate__fadeInUp">
+            <form id="addFaceForm" class="form-container">
+                <label for="user_id">ID:</label>
+                <input type="text" id="user_id" name="user_id" readonly>
+                <label for="user_name">Tên:</label>
+                <input type="text" id="user_name" name="user_name" required>
+                <div id="camera" class="camera-container">
+                    <img id="videoFeed" src="{{ url_for('video_feed') }}" alt="Video Feed">
+                </div>
+                <button type="submit" class="submit-button"><i class="fas fa-user-plus"></i> Thêm khuôn mặt</button>
+            </form>
+        </section>
+    </main>
+
+    <script>
+        document.getElementById('homeButton').addEventListener('click', function() {
+            window.location.href = '/';
+        });
+
+        document.getElementById('addFaceForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const formData = new FormData(this);
+            fetch('/add_face', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                Swal.fire({
+                    title: 'Thành công!',
+                    text: data.message,
+                    icon: 'success',
+                    confirmButtonText: 'OK'
+                }).then(() => {
+                    fetchNextId();  // Lấy ID mới sau khi thêm khuôn mặt thành công
+                });
+            })
+            .catch(error => {
+                Swal.fire({
+                    title: 'Lỗi!',
+                    text: 'Có lỗi xảy ra khi thêm dữ liệu khuôn mặt.',
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                });
+                console.error('Error adding face data:', error);
+            });
+        });
+
+        function fetchNextId() {
+            fetch('/get_next_id')
+                .then(response => response.json())
+                .then(data => {
+                    const userIdInput = document.getElementById('user_id');
+                    userIdInput.value = data.next_id;
+                })
+                .catch(error => {
+                    console.error('Error fetching next ID:', error);
+                });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            fetchNextId();  // Lấy ID mới khi trang được tải
+        });
+    </script>
+</body>
+</html>            --- End of add_face.html ---
+            --- Start of diemdanh_tudong.html ---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Điểm danh tự động</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+    <header class="animate__animated animate__fadeInDown">
+        <h1>Điểm danh tự động</h1>
         <button id="homeButton" class="home-button"><i class="fas fa-home"></i> Trở về trang chủ</button>
     </header>
 
@@ -53,118 +318,8 @@
                 });
         }
 
-        setInterval(updateAttendanceInfo, 5000); // Cập nhật thông tin điểm danh mỗi 5 giây
+        setInterval(updateAttendanceInfo, 3000); // Cập nhật thông tin điểm danh mỗi 5 giây
     </script>
+
 </body>
-</html>            --- End of diemdanh.html ---
-            --- Start of index.html ---
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trang web điểm danh học sinh tự động bằng công nghệ AI</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-</head>
-<body>
-    <header class="animate__animated animate__fadeInDown">
-        <h1>Trang web điểm danh học sinh tự động bằng công nghệ AI</h1>
-        <button id="deleteDataButton" class="delete-button"><i class="fas fa-trash-alt"></i> Xóa dữ liệu đã train</button>
-        <button id="addFaceButton" class="delete-button"><i class="fas fa-user-plus"></i> Thêm dữ liệu khuôn mặt</button>
-        <button id="trainModelButton" class="delete-button"><i class="fas fa-cogs"></i> Huấn luyện mô hình</button>
-        <button id="attendanceButton" class="delete-button"><i class="fas fa-check-circle"></i> Điểm danh</button>
-    </header>
-
-    <main>
-        <section class="hero animate__animated animate__fadeInUp">
-            <h2>Chào mừng bạn đến với hệ thống điểm danh tự động</h2>
-            <p>Sử dụng công nghệ AI để nhận diện khuôn mặt và điểm danh học sinh một cách nhanh chóng và chính xác.</p>
-        </section>
-    </main>
-
-    <script>
-        document.getElementById('deleteDataButton').addEventListener('click', function() {
-            Swal.fire({
-                title: 'Bạn có chắc chắn?',
-                text: "Bạn sẽ không thể hoàn tác hành động này!",
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#3085d6',
-                cancelButtonColor: '#d33',
-                confirmButtonText: 'Vâng, xóa nó!',
-                cancelButtonText: 'Hủy'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    fetch('/delete_data', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ confirm: true })
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        Swal.fire({
-                            title: 'Thành công!',
-                            text: data.message,
-                            icon: 'success',
-                            confirmButtonText: 'OK'
-                        });
-                    })
-                    .catch(error => {
-                        Swal.fire({
-                            title: 'Lỗi!',
-                            text: 'Có lỗi xảy ra khi xóa dữ liệu.',
-                            icon: 'error',
-                            confirmButtonText: 'OK'
-                        });
-                        console.error('Error deleting data:', error);
-                    });
-                }
-            });
-        });
-
-        document.getElementById('addFaceButton').addEventListener('click', function() {
-            window.location.href = '/add_face';
-        });
-
-        document.getElementById('trainModelButton').addEventListener('click', function() {
-            fetch('/train_model', { method: 'POST' })
-                .then(response => response.json())
-                .then(data => {
-                    Swal.fire({
-                        title: 'Thành công!',
-                        text: data.message,
-                        icon: 'success',
-                        confirmButtonText: 'OK'
-                    });
-                })
-                .catch(error => {
-                    Swal.fire({
-                        title: 'Lỗi!',
-                        text: 'Có lỗi xảy ra khi huấn luyện mô hình.',
-                        icon: 'error',
-                        confirmButtonText: 'OK'
-                    });
-                    console.error('Error training model:', error);
-                });
-        });
-
-        document.getElementById('attendanceButton').addEventListener('click', function() {
-            window.location.href = '/attendance';
-        });
-    </script>
-</body>
-</html>            --- End of index.html ---
-        --- Start of face_recognition_model.py ---
-import joblib
-
-def load_model():
-    model_path = 'models/face_recognition_model.pkl'
-    model = joblib.load(model_path)
-    return model        --- End of face_recognition_model.py ---
-        --- Start of __init__.py ---
-        --- End of __init__.py ---
+</html>            --- End of diemdanh_tudong.html ---

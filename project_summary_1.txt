@@ -30,15 +30,102 @@
             styles.css
         templates/
             add_face.html
-            diemdanh.html
+            diemdanh_tudong.html
             index.html
         __pycache__/
             routes.cpython-311.pyc
             __init__.cpython-311.pyc
     data/
+        augmented_images/
+            1_face_0_aug_0.jpg
+            1_face_0_aug_1.jpg
+            1_face_0_aug_2.jpg
+            1_face_0_aug_3.jpg
+            1_face_0_aug_4.jpg
+            1_face_10_aug_0.jpg
+            1_face_10_aug_1.jpg
+            1_face_10_aug_2.jpg
+            1_face_10_aug_3.jpg
+            1_face_10_aug_4.jpg
+            1_face_11_aug_0.jpg
+            1_face_11_aug_1.jpg
+            1_face_11_aug_2.jpg
+            1_face_11_aug_3.jpg
+            1_face_11_aug_4.jpg
+            1_face_1_aug_0.jpg
+            1_face_1_aug_1.jpg
+            1_face_1_aug_2.jpg
+            1_face_1_aug_3.jpg
+            1_face_1_aug_4.jpg
+            1_face_2_aug_0.jpg
+            1_face_2_aug_1.jpg
+            1_face_2_aug_2.jpg
+            1_face_2_aug_3.jpg
+            1_face_2_aug_4.jpg
+            1_face_3_aug_0.jpg
+            1_face_3_aug_1.jpg
+            1_face_3_aug_2.jpg
+            1_face_3_aug_3.jpg
+            1_face_3_aug_4.jpg
+            1_face_4_aug_0.jpg
+            1_face_4_aug_1.jpg
+            1_face_4_aug_2.jpg
+            1_face_4_aug_3.jpg
+            1_face_4_aug_4.jpg
+            1_face_5_aug_0.jpg
+            1_face_5_aug_1.jpg
+            1_face_5_aug_2.jpg
+            1_face_5_aug_3.jpg
+            1_face_5_aug_4.jpg
+            1_face_6_aug_0.jpg
+            1_face_6_aug_1.jpg
+            1_face_6_aug_2.jpg
+            1_face_6_aug_3.jpg
+            1_face_6_aug_4.jpg
+            1_face_7_aug_0.jpg
+            1_face_7_aug_1.jpg
+            1_face_7_aug_2.jpg
+            1_face_7_aug_3.jpg
+            1_face_7_aug_4.jpg
+            1_face_8_aug_0.jpg
+            1_face_8_aug_1.jpg
+            1_face_8_aug_2.jpg
+            1_face_8_aug_3.jpg
+            1_face_8_aug_4.jpg
+            1_face_9_aug_0.jpg
+            1_face_9_aug_1.jpg
+            1_face_9_aug_2.jpg
+            1_face_9_aug_3.jpg
+            1_face_9_aug_4.jpg
         processed_images/
+            1_face_0.jpg
+            1_face_1.jpg
+            1_face_10.jpg
+            1_face_11.jpg
+            1_face_2.jpg
+            1_face_3.jpg
+            1_face_4.jpg
+            1_face_5.jpg
+            1_face_6.jpg
+            1_face_7.jpg
+            1_face_8.jpg
+            1_face_9.jpg
         raw_images/
+            user_1_Cuong/
+                1_face_0.jpg
+                1_face_1.jpg
+                1_face_10.jpg
+                1_face_11.jpg
+                1_face_2.jpg
+                1_face_3.jpg
+                1_face_4.jpg
+                1_face_5.jpg
+                1_face_6.jpg
+                1_face_7.jpg
+                1_face_8.jpg
+                1_face_9.jpg
     models/
+        face_recognition_model.h5
         face_recognition_model.py
         __init__.py
     --- Start of app.py ---
@@ -238,76 +325,3 @@ def add_face():
         except Exception as e:
             return jsonify({'message': f'Có lỗi xảy ra khi thêm dữ liệu khuôn mặt: {str(e)}'}), 500
     return render_template('add_face.html')            --- End of add_face.py ---
-            --- Start of attendance.py ---
-import os
-import json
-from flask import request, jsonify, render_template, Response
-import cv2
-import numpy as np
-import joblib
-from app import app
-
-model_path = 'models/face_recognition_model.pkl'
-students_file = 'students.json'
-
-# Kiểm tra nếu model tồn tại
-if os.path.exists(model_path):
-    model = joblib.load(model_path)
-else:
-    model = None
-
-# Đọc dữ liệu học sinh từ tệp JSON
-students_data = []
-if os.path.exists(students_file):
-    with open(students_file, 'r', encoding='utf-8') as file:
-        try:
-            students_data = json.load(file)
-        except json.JSONDecodeError:
-            students_data = []
-
-@app.route('/attendance')
-def attendance():
-    return render_template('diemdanh.html')
-
-@app.route('/attendance_feed')
-def attendance_feed():
-    return Response(gen_attendance_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-def gen_attendance_frames():
-    if not model:
-        raise Exception("Model chưa được huấn luyện. Vui lòng huấn luyện mô hình trước khi điểm danh.")
-
-    camera = cv2.VideoCapture(0)
-    while True:
-        success, frame = camera.read()
-        if not success:
-            break
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-        faces = face_cascade.detectMultiScale(gray, 1.1, 4)
-        
-        names = []
-        for (x, y, w, h) in faces:
-            face_img = frame[y:y+h, x:x+w]
-            face_img = cv2.resize(face_img, (128, 128))
-            face_img = face_img / 255.0
-            face_img = face_img.reshape(1, -1)
-            
-            predicted_id = model.predict(face_img)[0]
-            name = next((student['name'] for student in students_data if student['id'] == predicted_id), "Unknown")
-            names.append(name)
-            
-            cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
-            cv2.putText(frame, name, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
-        
-        ret, buffer = cv2.imencode('.jpg', frame)
-        frame = buffer.tobytes()
-        
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-    
-    camera.release()
-
-@app.route('/get_attendance', methods=['GET'])
-def get_attendance():
-    return jsonify({'students': students_data})            --- End of attendance.py ---
