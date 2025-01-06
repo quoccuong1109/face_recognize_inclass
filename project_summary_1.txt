@@ -38,10 +38,6 @@
     data/
         processed_images/
         raw_images/
-            user_10_Khang/
-            user_14_Khánh/
-            user_15_Khánh/
-            user_9_Khang/
     models/
         face_recognition_model.py
         __init__.py
@@ -146,93 +142,96 @@ app = Flask(__name__)
 from app.routes import home
 from app.routes import add_face
 from app.routes import train_model
-from app.routes import delete_data
+from app.routes import delete_data  # Import the delete_data module
 from app.routes import video_feed
 from app.routes import get_next_id
-from app.routes import attendance        --- End of __init__.py ---
+from app.routes import attendance
+
+# Register the blueprint
+app.register_blueprint(delete_data.delete_data_bp, url_prefix='/')        --- End of __init__.py ---
             --- Start of add_face.py ---
 from flask import request, jsonify, render_template
 from app import app
 import os
 import json
 import cv2
+import threading
 
 def get_next_id():
     current_id = 0
     if os.path.exists('current_id.json'):
-        with open('current_id.json', 'r') as file:
+        with open('current_id.json', 'r', encoding='utf-8') as file:
             current_id = json.load(file).get('current_id', 0)
     next_id = current_id + 1
-    with open('current_id.json', 'w') as file:
-        json.dump({'current_id': next_id}, file)
+    with open('current_id.json', 'w', encoding='utf-8') as file:
+        json.dump({'current_id': next_id}, file, ensure_ascii=False)
     return next_id
+
+def capture_face_images(user_id, user_name):
+    raw_images_dir = 'data/raw_images'
+    user_dir = os.path.join(raw_images_dir, f'user_{user_id}_{user_name}')
+    if not os.path.exists(user_dir):
+        os.makedirs(user_dir)
+
+    camera = cv2.VideoCapture(0)
+    if not camera.isOpened():
+        raise Exception("Không thể mở camera")
+
+    count = 0
+    while count < 10:  # Chụp 10 tấm ảnh
+        success, frame = camera.read()
+        if not success:
+            raise Exception("Không thể đọc khung hình từ camera")
+
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        faces = face_cascade.detectMultiScale(frame, 1.1, 4)
+
+        for (x, y, w, h) in faces:
+            cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
+            face_img = frame[y:y+h, x:x+w]
+            img_path = os.path.join(user_dir, f'{user_id}_face_{count}.jpg')
+            cv2.imwrite(img_path, face_img)
+            count += 1
+
+        cv2.imshow('Thu thập dữ liệu khuôn mặt', frame)
+        cv2.waitKey(1000)  # Chờ 1 giây giữa các lần chụp
+
+    camera.release()
+    cv2.destroyAllWindows()
+
+    # Log the new user to students.json
+    students_data = []
+    if os.path.exists('students.json'):
+        with open('students.json', 'r', encoding='utf-8') as file:
+            try:
+                students_data = json.load(file)
+            except json.JSONDecodeError:
+                pass
+
+    students_data.append({'id': user_id, 'name': user_name})
+
+    with open('students.json', 'w', encoding='utf-8') as file:
+        json.dump(students_data, file, ensure_ascii=False)
+
+    print(f"Đã thu thập {count} hình ảnh khuôn mặt cho người dùng {user_name} (ID: {user_id})")
+
+def capture_face_images_thread(user_id, user_name):
+    thread = threading.Thread(target=capture_face_images, args=(user_id, user_name))
+    thread.start()
+    thread.join()  # Wait for the thread to finish
+    print(f"Thành công đã thêm khuôn mặt của {user_name} (ID: {user_id})")
 
 @app.route('/add_face', methods=['GET', 'POST'])
 def add_face():
     if request.method == 'POST':
         user_id = get_next_id()
         user_name = request.form['user_name']
-        success = collect_face_data(user_id, user_name)
-        if success:
-            return jsonify({'message': f'Đã thêm dữ liệu khuôn mặt thành công cho người dùng {user_name} (ID: {user_id})!'})
-        else:
-            return jsonify({'message': 'Có lỗi xảy ra khi thêm dữ liệu khuôn mặt.'}), 500
-    return render_template('add_face.html')
-
-def collect_face_data(user_id, user_name):
-    try:
-        raw_images_dir = 'data/raw_images'
-        user_dir = os.path.join(raw_images_dir, f'user_{user_id}_{user_name}')
-        if not os.path.exists(user_dir):
-            os.makedirs(user_dir)
-
-        camera = cv2.VideoCapture(0)
-        if not camera.isOpened():
-            raise Exception("Không thể mở camera")
-
-        count = 0
-        while count < 10:  # Chụp 10 tấm ảnh
-            success, frame = camera.read()
-            if not success:
-                raise Exception("Không thể đọc khung hình từ camera")
-
-            face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-            faces = face_cascade.detectMultiScale(frame, 1.1, 4)
-
-            for (x, y, w, h) in faces:
-                cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
-                face_img = frame[y:y+h, x:x+w]
-                img_path = os.path.join(user_dir, f'{user_id}_face_{count}.jpg')
-                cv2.imwrite(img_path, face_img)
-                count += 1
-
-            cv2.imshow('Thu thập dữ liệu khuôn mặt', frame)
-            cv2.waitKey(1000)  # Chờ 1 giây giữa các lần chụp
-
-        camera.release()
-        cv2.destroyAllWindows()
-        
-        # Log the new user to students.json
-        students_data = []
-        if os.path.exists('students.json'):
-            with open('students.json', 'r') as file:
-                try:
-                    students_data = json.load(file)
-                except json.JSONDecodeError:
-                    pass
-        
-        students_data.append({'id': user_id, 'name': user_name})
-        
-        with open('students.json', 'w') as file:
-            json.dump(students_data, file)
-
-        print(f"Đã thu thập {count} hình ảnh khuôn mặt cho người dùng {user_name} (ID: {user_id})")
-        
-        return True
-
-    except Exception as e:
-        print(f"Lỗi: {e}")
-        return False            --- End of add_face.py ---
+        try:
+            capture_face_images_thread(user_id, user_name)
+            return jsonify({'message': f'Thành công đã thêm khuôn mặt của {user_name} (ID: {user_id})'})
+        except Exception as e:
+            return jsonify({'message': f'Có lỗi xảy ra khi thêm dữ liệu khuôn mặt: {str(e)}'}), 500
+    return render_template('add_face.html')            --- End of add_face.py ---
             --- Start of attendance.py ---
 import os
 import json
@@ -254,7 +253,7 @@ else:
 # Đọc dữ liệu học sinh từ tệp JSON
 students_data = []
 if os.path.exists(students_file):
-    with open(students_file, 'r') as file:
+    with open(students_file, 'r', encoding='utf-8') as file:
         try:
             students_data = json.load(file)
         except json.JSONDecodeError:
@@ -269,6 +268,9 @@ def attendance_feed():
     return Response(gen_attendance_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 def gen_attendance_frames():
+    if not model:
+        raise Exception("Model chưa được huấn luyện. Vui lòng huấn luyện mô hình trước khi điểm danh.")
+
     camera = cv2.VideoCapture(0)
     while True:
         success, frame = camera.read()
@@ -285,12 +287,9 @@ def gen_attendance_frames():
             face_img = face_img / 255.0
             face_img = np.expand_dims(face_img, axis=0)
             
-            if model:
-                predictions = model.predict(face_img)
-                predicted_id = np.argmax(predictions)
-                name = next((student['name'] for student in students_data if student['id'] == predicted_id), "Unknown")
-            else:
-                name = "Unknown"
+            predictions = model.predict(face_img)
+            predicted_id = np.argmax(predictions)
+            name = next((student['name'] for student in students_data if student['id'] == predicted_id), "Unknown")
             names.append(name)
             
             cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
@@ -307,65 +306,3 @@ def gen_attendance_frames():
 @app.route('/get_attendance', methods=['GET'])
 def get_attendance():
     return jsonify({'students': students_data})            --- End of attendance.py ---
-            --- Start of delete_data.py ---
-import os
-import json
-import shutil
-from flask import Blueprint, jsonify, request
-
-delete_data_bp = Blueprint('delete_data', __name__)
-
-@delete_data_bp.route('/delete_data', methods=['POST'])
-def delete_data():
-    log_dir = 'log'
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-    
-    log_file_path = os.path.join(log_dir, 'error_log.json')
-    
-    try:
-        # Xác nhận trước khi xóa dữ liệu
-        confirm = request.json.get('confirm', False)
-        if not confirm:
-            return jsonify({'message': 'Xác nhận xóa dữ liệu không thành công.'}), 400
-
-        # Reset ID về 1
-        with open('current_id.json', 'w') as file:
-            json.dump({'current_id': 1}, file)
-
-        # Xóa nội dung trong tệp students.json
-        with open('students.json', 'w') as file:
-            json.dump([], file)
-
-        # Xóa tất cả các hình ảnh và thư mục con trong thư mục data
-        data_folders = ['data/processed_images', 'data/raw_images']
-        for folder in data_folders:
-            if os.path.exists(folder):
-                shutil.rmtree(folder)
-                os.makedirs(folder)  # Tạo lại thư mục rỗng sau khi xóa
-
-        # Ghi log thành công
-        with open(log_file_path, 'a') as log_file:
-            log_entry = {'message': 'Đã xóa hết dữ liệu học sinh, reset ID về 1 và xóa các hình ảnh đã chụp thành công!'}
-            json.dump(log_entry, log_file)
-            log_file.write('\n')
-
-        return jsonify({'message': 'Đã xóa hết dữ liệu học sinh, reset ID về 1 và xóa các hình ảnh đã chụp thành công!'})
-    except Exception as e:
-        # Ghi lỗi ra file log
-        try:
-            with open(log_file_path, 'a') as log_file:
-                log_entry = {'error': str(e)}
-                json.dump(log_entry, log_file)
-                log_file.write('\n')
-        except Exception as log_error:
-            print(f"Không thể ghi lỗi vào file log: {log_error}")
-        
-        # Thông báo loại lỗi trên màn hình website
-        return jsonify({'message': f'Có lỗi xảy ra khi xóa dữ liệu: {str(e)}'}), 500
-
-if __name__ == '__main__':
-    from flask import Flask
-    app = Flask(__name__)
-    app.register_blueprint(delete_data_bp)
-    app.run(debug=True)            --- End of delete_data.py ---

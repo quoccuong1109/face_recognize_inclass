@@ -31,7 +31,7 @@ def delete_data():
 
         # Reset ID về 1
         with open('current_id.json', 'w', encoding='utf-8') as file:
-            json.dump({'current_id': 1}, file, ensure_ascii=False)
+            json.dump({'current_id': 0}, file, ensure_ascii=False)
 
         # Xóa nội dung trong tệp students.json
         with open('students.json', 'w', encoding='utf-8') as file:

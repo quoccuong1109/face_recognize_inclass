@@ -1,6 +1,6 @@
 import os
 import numpy as np
-import tensorflow as tf
+import cv2
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
 
@@ -21,6 +21,11 @@ data_folder = 'data/processed_images'
 images, labels = load_data(data_folder)
 images = images.reshape(-1, 128, 128, 1)
 
+num_classes = len(set(labels))  # Số lượng lớp đầu ra
+
+# Đảm bảo các nhãn nằm trong phạm vi [0, num_classes-1]
+labels = labels - labels.min()
+
 model = Sequential([
     Conv2D(32, (3, 3), activation='relu', input_shape=(128, 128, 1)),
     MaxPooling2D((2, 2)),
@@ -28,7 +33,7 @@ model = Sequential([
     MaxPooling2D((2, 2)),
     Flatten(),
     Dense(128, activation='relu'),
-    Dense(len(set(labels)), activation='softmax')
+    Dense(num_classes, activation='softmax')  # Số lượng lớp đầu ra
 ])
 
 model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])

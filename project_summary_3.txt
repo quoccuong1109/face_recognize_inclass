@@ -1,3 +1,62 @@
+            --- Start of diemdanh.html ---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Điểm danh</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+    <header class="animate__animated animate__fadeInDown">
+        <h1>Điểm danh</h1>
+        <button id="homeButton" class="home-button"><i class="fas fa-home"></i> Trở về trang chủ</button>
+    </header>
+
+    <main>
+        <section class="hero animate__animated animate__fadeInUp">
+            <div id="camera" class="camera-container">
+                <img id="videoFeed" src="{{ url_for('attendance_feed') }}" alt="Video Feed">
+            </div>
+            <div id="attendanceInfo" class="attendance-info">
+                <h2>Thông tin điểm danh</h2>
+                <p id="studentCount">Số lượng học sinh: 0</p>
+                <ul id="studentList"></ul>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        document.getElementById('homeButton').addEventListener('click', function() {
+            window.location.href = '/';
+        });
+
+        function updateAttendanceInfo() {
+            fetch('/get_attendance')
+                .then(response => response.json())
+                .then(data => {
+                    const studentCountElement = document.getElementById('studentCount');
+                    const studentListElement = document.getElementById('studentList');
+                    studentCountElement.textContent = `Số lượng học sinh: ${data.students.length}`;
+                    studentListElement.innerHTML = '';
+                    data.students.forEach(student => {
+                        const listItem = document.createElement('li');
+                        listItem.textContent = student.name;
+                        studentListElement.appendChild(listItem);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching attendance info:', error);
+                });
+        }
+
+        setInterval(updateAttendanceInfo, 5000); // Cập nhật thông tin điểm danh mỗi 5 giây
+    </script>
+</body>
+</html>            --- End of diemdanh.html ---
             --- Start of index.html ---
 <!DOCTYPE html>
 <html lang="en">

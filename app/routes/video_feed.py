@@ -7,7 +7,10 @@ def video_feed():
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 def gen_frames():
-    camera = cv2.VideoCapture(0)
+    camera = cv2.VideoCapture(0, cv2.CAP_DSHOW)  # Sử dụng backend DirectShow
+    if not camera.isOpened():
+        raise Exception("Không thể mở camera")
+
     while True:
         success, frame = camera.read()
         if not success:
@@ -19,6 +22,8 @@ def gen_frames():
             cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
         ret, buffer = cv2.imencode('.jpg', frame)
         frame = buffer.tobytes()
+        
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+    
     camera.release()

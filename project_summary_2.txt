@@ -1,3 +1,53 @@
+            --- Start of delete_data.py ---
+import os
+import json
+import shutil
+from flask import Blueprint, jsonify, request
+
+delete_data_bp = Blueprint('delete_data', __name__)
+
+@delete_data_bp.route('/delete_data', methods=['POST'])
+def delete_data():
+    try:
+        # Xóa model hiện tại
+        model_path = 'models/face_recognition_model.h5'
+        if os.path.exists(model_path):
+            os.remove(model_path)
+        else:
+            print(f"Model path {model_path} does not exist.")
+
+        # Xóa dữ liệu ảnh hiện có
+        data_folders = ['data/processed_images', 'data/raw_images']
+        for folder in data_folders:
+            if os.path.exists(folder):
+                for root, dirs, files in os.walk(folder):
+                    for dir in dirs:
+                        os.chmod(os.path.join(root, dir), 0o777)
+                    for file in files:
+                        os.chmod(os.path.join(root, file), 0o777)
+                shutil.rmtree(folder)
+                os.makedirs(folder)  # Tạo lại thư mục rỗng sau khi xóa
+            else:
+                print(f"Data folder {folder} does not exist.")
+
+        # Reset ID về 1
+        with open('current_id.json', 'w', encoding='utf-8') as file:
+            json.dump({'current_id': 1}, file, ensure_ascii=False)
+
+        # Xóa nội dung trong tệp students.json
+        with open('students.json', 'w', encoding='utf-8') as file:
+            json.dump([], file, ensure_ascii=False)
+
+        return jsonify({'message': 'Đã xóa hết dữ liệu học sinh, reset ID về 1 và xóa các hình ảnh đã chụp thành công!'})
+    except Exception as e:
+        print(f"Error occurred: {str(e)}")
+        return jsonify({'message': f'Có lỗi xảy ra khi xóa dữ liệu: {str(e)}'}), 500
+
+if __name__ == '__main__':
+    from flask import Flask
+    app = Flask(__name__)
+    app.register_blueprint(delete_data_bp)
+    app.run(debug=True)            --- End of delete_data.py ---
             --- Start of get_next_id.py ---
 from flask import jsonify
 from app import app
@@ -31,7 +81,6 @@ from app import app
 import os
 import cv2
 import numpy as np
-import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
 
@@ -97,7 +146,10 @@ def video_feed():
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 def gen_frames():
-    camera = cv2.VideoCapture(0)
+    camera = cv2.VideoCapture(0, cv2.CAP_DSHOW)  # Sử dụng backend DirectShow
+    if not camera.isOpened():
+        raise Exception("Không thể mở camera")
+
     while True:
         success, frame = camera.read()
         if not success:
@@ -109,8 +161,10 @@ def gen_frames():
             cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
         ret, buffer = cv2.imencode('.jpg', frame)
         frame = buffer.tobytes()
+        
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+    
     camera.release()            --- End of video_feed.py ---
             --- Start of styles.css ---
 body {
@@ -120,6 +174,7 @@ body {
     background-color: #f4f4f9;
     color: #333;
     overflow-x: hidden;
+    font-size: 16px; /* Default font size */
 }
 
 header {
@@ -206,15 +261,15 @@ main {
 }
 
 .camera-container {
-    margin: 20px 0;
+    margin: 20px auto; /* Center the camera container */
     width: 100%;
     max-width: 400px;
     height: 300px;
     background-color: #e0e0e0;
     border: 2px dashed #ccc;
     display: flex;
-    justify-content: center;
-    align-items: center;
+    justify-content: center; /* Center content horizontally */
+    align-items: center; /* Center content vertically */
     overflow: hidden;
 }
 
@@ -222,6 +277,44 @@ main {
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    body {
+        font-size: 14px; /* Smaller font size for smaller screens */
+    }
+
+    header {
+        flex-direction: column; /* Stack header elements vertically */
+        align-items: flex-start; /* Align items to the start */
+    }
+
+    .hero {
+        padding: 20px; /* Reduce padding for smaller screens */
+    }
+
+    header h1 {
+        font-size: 20px; /* Smaller header font size */
+    }
+
+    .hero h2 {
+        font-size: 24px; /* Smaller hero heading size */
+    }
+}
+
+@media (max-width: 480px) {
+    body {
+        font-size: 12px; /* Even smaller font size for very small screens */
+    }
+
+    header h1 {
+        font-size: 18px; /* Even smaller header font size */
+    }
+
+    .hero h2 {
+        font-size: 20px; /* Even smaller hero heading size */
+    }
 }            --- End of styles.css ---
             --- Start of add_face.html ---
 <!DOCTYPE html>
@@ -302,62 +395,3 @@ main {
     </script>
 </body>
 </html>            --- End of add_face.html ---
-            --- Start of diemdanh.html ---
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Điểm danh</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-</head>
-<body>
-    <header class="animate__animated animate__fadeInDown">
-        <h1>Điểm danh</h1>
-        <button id="homeButton" class="home-button"><i class="fas fa-home"></i> Trở về trang chủ</button>
-    </header>
-
-    <main>
-        <section class="hero animate__animated animate__fadeInUp">
-            <div id="camera" class="camera-container">
-                <img id="videoFeed" src="{{ url_for('attendance_feed') }}" alt="Video Feed">
-            </div>
-            <div id="attendanceInfo" class="attendance-info">
-                <h2>Thông tin điểm danh</h2>
-                <p id="studentCount">Số lượng học sinh: 0</p>
-                <ul id="studentList"></ul>
-            </div>
-        </section>
-    </main>
-
-    <script>
-        document.getElementById('homeButton').addEventListener('click', function() {
-            window.location.href = '/';
-        });
-
-        function updateAttendanceInfo() {
-            fetch('/get_attendance')
-                .then(response => response.json())
-                .then(data => {
-                    const studentCountElement = document.getElementById('studentCount');
-                    const studentListElement = document.getElementById('studentList');
-                    studentCountElement.textContent = `Số lượng học sinh: ${data.students.length}`;
-                    studentListElement.innerHTML = '';
-                    data.students.forEach(student => {
-                        const listItem = document.createElement('li');
-                        listItem.textContent = student.name;
-                        studentListElement.appendChild(listItem);
-                    });
-                })
-                .catch(error => {
-                    console.error('Error fetching attendance info:', error);
-                });
-        }
-
-        setInterval(updateAttendanceInfo, 5000); // Cập nhật thông tin điểm danh mỗi 5 giây
-    </script>
-</body>
-</html>            --- End of diemdanh.html ---
