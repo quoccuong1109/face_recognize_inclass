@@ -24,6 +24,7 @@ def capture_face_images(user_id, user_name):
     user_dir = os.path.join(raw_images_dir, f'user_{user_id}_{user_name}')
     if not os.path.exists(user_dir):
         os.makedirs(user_dir)
+        print(f"Đã tạo thư mục: {user_dir}")
 
     camera = cv2.VideoCapture(0)
     if not camera.isOpened():
@@ -67,7 +68,7 @@ def capture_face_images(user_id, user_name):
         json.dump(students_data, file, ensure_ascii=False)
 
     print(f"Đã thu thập {count} hình ảnh khuôn mặt cho người dùng {user_name} (ID: {user_id})")
-    
+
 def capture_face_images_thread(user_id, user_name):
     thread = threading.Thread(target=capture_face_images, args=(user_id, user_name))
     thread.start()

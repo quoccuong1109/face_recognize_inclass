@@ -26,6 +26,10 @@ num_classes = len(set(labels))  # Số lượng lớp đầu ra
 # Đảm bảo các nhãn nằm trong phạm vi [0, num_classes-1]
 labels = labels - labels.min()
 
+# Kiểm tra lại các nhãn và số lượng lớp đầu ra
+print(f"Labels: {labels}")
+print(f"Number of classes: {num_classes}")
+
 model = Sequential([
     Conv2D(32, (3, 3), activation='relu', input_shape=(128, 128, 1)),
     MaxPooling2D((2, 2)),
