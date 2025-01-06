@@ -18,7 +18,7 @@ else:
 # Đọc dữ liệu học sinh từ tệp JSON
 students_data = []
 if os.path.exists(students_file):
-    with open(students_file, 'r') as file:
+    with open(students_file, 'r', encoding='utf-8') as file:
         try:
             students_data = json.load(file)
         except json.JSONDecodeError:
@@ -33,6 +33,9 @@ def attendance_feed():
     return Response(gen_attendance_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 def gen_attendance_frames():
+    if not model:
+        raise Exception("Model chưa được huấn luyện. Vui lòng huấn luyện mô hình trước khi điểm danh.")
+
     camera = cv2.VideoCapture(0)
     while True:
         success, frame = camera.read()
@@ -49,12 +52,9 @@ def gen_attendance_frames():
             face_img = face_img / 255.0
             face_img = np.expand_dims(face_img, axis=0)
             
-            if model:
-                predictions = model.predict(face_img)
-                predicted_id = np.argmax(predictions)
-                name = next((student['name'] for student in students_data if student['id'] == predicted_id), "Unknown")
-            else:
-                name = "Unknown"
+            predictions = model.predict(face_img)
+            predicted_id = np.argmax(predictions)
+            name = next((student['name'] for student in students_data if student['id'] == predicted_id), "Unknown")
             names.append(name)
             
             cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
