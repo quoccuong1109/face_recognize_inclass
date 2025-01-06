@@ -15,7 +15,7 @@
         <button id="deleteDataButton" class="delete-button"><i class="fas fa-trash-alt"></i> Xóa dữ liệu đã train</button>
         <button id="addFaceButton" class="delete-button"><i class="fas fa-user-plus"></i> Thêm dữ liệu khuôn mặt</button>
         <button id="trainModelButton" class="delete-button"><i class="fas fa-cogs"></i> Huấn luyện mô hình</button>
-        <button id="attendanceButton" class="delete-button"><i class="fas fa-check-circle"></i> Điểm danh</button>
+        <button id="attendanceButton" class="delete-button"><i class="fas fa-check-circle"></i> Điểm danh tự động</button>
     </header>
 
     <main>
@@ -48,7 +48,7 @@
                     .then(response => response.json())
                     .then(data => {
                         Swal.fire({
-                            title: 'Thành công!',
+                            title: 'Thành công',
                             text: data.message,
                             icon: 'success',
                             confirmButtonText: 'OK'
@@ -94,7 +94,7 @@
         });
 
         document.getElementById('attendanceButton').addEventListener('click', function() {
-            window.location.href = '/attendance';
+            window.location.href = '/diemdanh_tudong';
         });
     </script>
 </body>

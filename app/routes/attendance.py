@@ -3,15 +3,15 @@ import json
 from flask import request, jsonify, render_template, Response
 import cv2
 import numpy as np
-from tensorflow.keras.models import load_model
+import joblib
 from app import app
 
-model_path = 'models/face_recognition_model.h5'
+model_path = 'models/face_recognition_model.pkl'
 students_file = 'students.json'
 
 # Kiểm tra nếu model tồn tại
 if os.path.exists(model_path):
-    model = load_model(model_path)
+    model = joblib.load(model_path)
 else:
     model = None
 
@@ -24,9 +24,9 @@ if os.path.exists(students_file):
         except json.JSONDecodeError:
             students_data = []
 
-@app.route('/attendance')
-def attendance():
-    return render_template('diemdanh.html')
+@app.route('/diemdanh_tudong')
+def diemdanh_tudong():
+    return render_template('diemdanh_tudong.html')
 
 @app.route('/attendance_feed')
 def attendance_feed():
@@ -50,15 +50,16 @@ def gen_attendance_frames():
             face_img = frame[y:y+h, x:x+w]
             face_img = cv2.resize(face_img, (128, 128))
             face_img = face_img / 255.0
-            face_img = np.expand_dims(face_img, axis=0)
+            face_img = face_img.reshape(1, -1)
             
-            predictions = model.predict(face_img)
-            predicted_id = np.argmax(predictions)
+            predicted_id = model.predict(face_img)[0]
+            predicted_prob = model.predict_proba(face_img)[0]
+            confidence = np.max(predicted_prob) * 100  # Tính toán tỷ lệ chính xác
             name = next((student['name'] for student in students_data if student['id'] == predicted_id), "Unknown")
             names.append(name)
             
             cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
-            cv2.putText(frame, name, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
+            cv2.putText(frame, f'{name} ({confidence:.2f}%)', (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
         
         ret, buffer = cv2.imencode('.jpg', frame)
         frame = buffer.tobytes()

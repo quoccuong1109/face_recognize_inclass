@@ -15,6 +15,9 @@ def train_model_route():
         images, labels = load_data('data/processed_images')
         images = images.reshape(-1, 128, 128, 1)
 
+        # Đảm bảo rằng nhãn bắt đầu từ 0
+        labels = np.array(labels) - 1
+
         model = Sequential([
             Conv2D(32, (3, 3), activation='relu', input_shape=(128, 128, 1)),
             MaxPooling2D((2, 2)),
@@ -39,11 +42,15 @@ def preprocess_images(input_folder, output_folder):
 
     for root, dirs, files in os.walk(input_folder):
         for file in files:
-            file_path = os.path.join(root, file)
+            file_path = os.path.join(root, file).replace('\\', '/')
+            print(f"Đang kiểm tra tệp: {file_path}")
             img = cv2.imread(file_path)
+            if img is None:
+                print(f"Không thể mở hoặc đọc tệp: {file_path}")
+                continue
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             resized = cv2.resize(gray, (128, 128))
-            output_path = os.path.join(output_folder, file)
+            output_path = os.path.join(output_folder, file).replace('\\', '/')
             cv2.imwrite(output_path, resized)
 
 def load_data(data_folder):

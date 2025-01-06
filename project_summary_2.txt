@@ -32,7 +32,7 @@ def delete_data():
 
         # Reset ID về 1
         with open('current_id.json', 'w', encoding='utf-8') as file:
-            json.dump({'current_id': 1}, file, ensure_ascii=False)
+            json.dump({'current_id': 0}, file, ensure_ascii=False)
 
         # Xóa nội dung trong tệp students.json
         with open('students.json', 'w', encoding='utf-8') as file:
@@ -368,6 +368,8 @@ main {
                     text: data.message,
                     icon: 'success',
                     confirmButtonText: 'OK'
+                }).then(() => {
+                    fetchNextId();  // Lấy ID mới sau khi thêm khuôn mặt thành công
                 });
             })
             .catch(error => {
@@ -381,7 +383,7 @@ main {
             });
         });
 
-        document.addEventListener('DOMContentLoaded', function() {
+        function fetchNextId() {
             fetch('/get_next_id')
                 .then(response => response.json())
                 .then(data => {
@@ -391,6 +393,10 @@ main {
                 .catch(error => {
                     console.error('Error fetching next ID:', error);
                 });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            fetchNextId();  // Lấy ID mới khi trang được tải
         });
     </script>
 </body>

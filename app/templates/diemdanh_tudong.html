@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Điểm danh</title>
+    <title>Điểm danh tự động</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
@@ -11,14 +11,14 @@
 </head>
 <body>
     <header class="animate__animated animate__fadeInDown">
-        <h1>Điểm danh</h1>
+        <h1>Điểm danh tự động</h1>
         <button id="homeButton" class="home-button"><i class="fas fa-home"></i> Trở về trang chủ</button>
     </header>
 
     <main>
         <section class="hero animate__animated animate__fadeInUp">
             <div id="camera" class="camera-container">
-                <img id="videoFeed" src="{{ url_for('attendance_feed') }}" alt="Video Feed">
+                <img id="videoFeed" src="{{ url_for('video_feed') }}" alt="Video Feed">
             </div>
             <div id="attendanceInfo" class="attendance-info">
                 <h2>Thông tin điểm danh</h2>
